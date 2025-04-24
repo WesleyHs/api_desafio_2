@@ -75,3 +75,64 @@ async def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db
 @app.get("/all/", response_model=List[BancoApi])
 def get_all(db: Session = Depends(get_db)):
     return db.query(models.BancoApi).all()
+
+@app.get("/order/{order_id}")
+def get_order(order_id: int, db: Session = Depends(get_db)):
+    try:
+        data = db.query(models.BancoApi).all()
+        
+        results = {}
+        for index in data:
+            for order in index.orders:
+                if order['order_id'] == order_id:
+                    results = {
+                        'user_id': index.user_id,
+                        'name': index.name,
+                        'orders': [order]
+                    }
+                    break
+                    
+        if not results:
+            raise HTTPException(status_code=404, detail="Pedido não existe")
+            
+        return results
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"erro": str(e), "mensagem": "Erro ao processar"})
+
+@app.get("/date/")
+def get_by_date(
+    start_date: str = Query(..., description="Data inicial no formato YYYYMMDD"),
+    end_date: str = Query(..., description="Data final no formato YYYYMMDD"),
+    db: Session = Depends(get_db)
+):
+    try:
+        start_date = datetime.strptime(start_date, '%Y%m%d')
+        end_date = datetime.strptime(end_date, '%Y%m%d')
+
+        data = db.query(models.BancoApi).all()
+        results = []
+
+        for index in data:
+            filtered_orders = []
+            for order in index.orders:
+                order_date = datetime.strptime(order['date'], '%Y-%m-%d')
+                if start_date <= order_date <= end_date:
+                    filtered_orders.append(order)
+            
+            if filtered_orders:
+                results.append({
+                    'user_id': index.user_id,
+                    'name': index.name,
+                    'orders': filtered_orders
+                })
+
+        if not results:
+            raise HTTPException(status_code=404, detail="Não existe pedidos nesse periodo")
+
+        return results
+
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de data invalido. Utilize YYYYMMDD")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail={"erro": str(e), "mensagem": "Erro ao processar"}) 
